@@ -1,7 +1,10 @@
 import React, { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+import axios from "axios";
+
 import Papa from "papaparse";
 import Fuse from "fuse.js"; 
-import { FaSearch } from "react-icons/fa";
+import { FaSearch, FaChartLine } from "react-icons/fa";
 import "../assets/autocomplete.css";
 
 const AutocompleteInput = () => {
@@ -9,6 +12,7 @@ const AutocompleteInput = () => {
   const [inputValue, setInputValue] = useState("");
   const [suggestions, setSuggestions] = useState([]);
   const [didYouMean, setDidYouMean] = useState("");     
+  const navigate = useNavigate();
 
   useEffect(() => {
     fetch("/listing_status.csv") 
@@ -67,11 +71,55 @@ const AutocompleteInput = () => {
     }
   };
 
-  const handleSearchClick = () => {
-    if (suggestions.length > 0) {
-      handleSuggestionClick(suggestions[0]);
+  const handleRiskAnalysis = async () => {
+    let selectedCompany = suggestions.length > 0 ? suggestions[0] : null;
+  
+    // Extract name and symbol if not selected from suggestions
+    if (!selectedCompany && inputValue.trim()) {
+      const match = inputValue.trim().match(/^(.*)\s\(([^)]+)\)$/); // Matches "Company Name (Symbol)"
+      if (match) {
+        selectedCompany = { name: match[1].trim(), symbol: match[2].trim() };
+      }
+    }
+  
+    if (selectedCompany?.symbol) {
+      console.log("Navigating to:", `/dashboard/graphs/${selectedCompany.symbol}`);
+      navigate(`/dashboards/${selectedCompany.symbol}`); // Ensure correct path
+  
+      try {
+        const response = await fetch(
+          `http://localhost:4000/predictStock?stock=${encodeURIComponent(selectedCompany.symbol)}` // Use only the symbol
+        );
+  
+        if (!response.ok) throw new Error(`HTTP error! Status: ${response.status}`);
+        
+        const data = await response.json();
+        console.log("Stock Prediction:", data);
+      } catch (error) {
+        console.error("Request Error:", error);
+      }
+    } else {
+      console.error("Invalid stock selection");
     }
   };
+  
+  
+  const getSentiments = async () => {
+    try {
+      const res = await axios.get('http://localhost:5000/predictStock', {
+        params: { stockInput: inputValue }  
+      });
+      console.log(res.data);
+      setResult(res.data);
+      navigate("/dashboard", { state: { sentimentData: res.data } });
+    } catch (err) {
+      console.log(err.message);
+    }
+  };
+  
+  
+  
+  
 
   return (
     <div className="parent-container">
@@ -85,7 +133,8 @@ const AutocompleteInput = () => {
             onKeyDown={handleKeyPress}
             className="input-box"
           />
-          <FaSearch className="search-icon" onClick={handleSearchClick} />
+          <FaSearch className="search-icon" onClick={getSentiments} />
+          <FaChartLine className="chart-simple" onClick={handleRiskAnalysis} />
         </div>
 
         {suggestions.length > 0 && (

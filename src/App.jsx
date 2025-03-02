@@ -3,15 +3,16 @@ import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 
 import HomeScreen from "./pages/HomeScreen.jsx";
 import List from "./pages/List.jsx";
-import Dashboards from "./pages/Dashboards.jsx";
+import RiskAnalysis from "./pages/Dashboards.jsx";
+import StockPredictionPage from "./pages/stockPrediction";
 
 const App = () => {
   return (
     <Router>
-      <Routes>
-        
+      <Routes>        
         <Route path="/" element={<HomeScreen />} />
-        <Route path="/Dashboards" element={<Dashboards />} />
+        <Route path="/dashboard" element={<StockPredictionPage />} />
+        <Route path="/Dashboards/:symbol" element={<RiskAnalysis />} />
       </Routes>
     </Router>
   );

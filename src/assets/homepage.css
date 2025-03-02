@@ -1,3 +1,7 @@
+:root {
+  background: rgba(161, 207, 222, 1);
+}
+
 .home-screen {
     position: absolute;
     overflow:auto;
@@ -5,6 +9,7 @@
     height: 100vh;
     width: 100%;
   }
+
   
   .background-img {
     position: absolute;
@@ -21,10 +26,15 @@
     cursor: pointer;
     padding: 0 15px;
     margin-top: 439px;
-    margin-left: 870px;
+    margin-left: 890px;
     color: aliceblue;
 }
-  
+ 
+.chart-simple {
+  font-size: 30px;
+  cursor: pointer;
+  color: aliceblue;
+}
   .headline {
     color: white;
     font-family: Inter, sans-serif;

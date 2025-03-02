@@ -1,89 +1,121 @@
 import { useEffect, useState } from "react";
-import { LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid, PieChart, Pie, Cell, Legend, BarChart, Bar } from "recharts";
-import { io } from "socket.io-client";
-import '../assets/Dashboards.css';
+import { useParams } from "react-router-dom";
+import axios from "axios";
 
-const socket = io("http://localhost:8000");
-
-const COLORS = ["#00C49F", "#FF8042"];
-
-const fakeData = [
-  { sentiment: 0.5, price: 1500, time: "10:00 AM", risk: 30 },
-  { sentiment: -0.3, price: 1400, time: "10:30 AM", risk: 70 },
-  { sentiment: 0.7, price: 1550, time: "11:00 AM", risk: 20 },
-  { sentiment: -0.1, price: 1450, time: "11:30 AM", risk: 60 },
-  { sentiment: 0.2, price: 1520, time: "12:00 PM", risk: 40 },
-];
-
-const heatmapData = [
-  { stock: "AAPL", sentiment: 0.9 },
-  { stock: "GOOGL", sentiment: -0.4 },
-  { stock: "AMZN", sentiment: 0.7 },
-  { stock: "MSFT", sentiment: -0.2 },
-  { stock: "TSLA", sentiment: 0.8 },
-];
-
-const App = () => {
-  const [data, setData] = useState(fakeData);
-  const [pieData, setPieData] = useState([]);
+const Dashboards = () => {
+  const { symbol } = useParams();
+  const [stockData, setStockData] = useState([]);
+  const [suspiciousActivity, setSuspiciousActivity] = useState([]);
+  const [riskSummary, setRiskSummary] = useState("");
+  const [finalVerdict, setFinalVerdict] = useState("");
 
   useEffect(() => {
-    const positive = fakeData.filter((d) => d.sentiment > 0).length;
-    const negative = fakeData.filter((d) => d.sentiment <= 0).length;
+    const fetchData = async () => {
+      try {
+        const response = await axios.get(`http://localhost:4000/predictStock?stock=${symbol}`);
+        console.log("Fetched Stock Data:", response.data);
 
-    setPieData([
-      { name: "Increase", value: positive },
-      { name: "Decrease", value: negative },
-    ]);
-  }, []);
+        if (!response.data.priceHistory.length) {
+          console.error("No stock data available");
+          return;
+        }
+
+        setStockData(response.data.riskAnalysis.slice(-20));
+        const flaggedActivities = [];
+        let highRiskCount = 0;
+        let extremeRiskCount = 0;
+
+        response.data.riskAnalysis.forEach((d, i, arr) => {
+          if (i === 0) return;
+          const prevRisk = arr[i - 1].risk;
+          if (d.risk > 80 || Math.abs(d.risk - prevRisk) > 30) {
+            flaggedActivities.push({
+              time: d.time,
+              message: `⚠️ Suspicious Risk at ${new Date(d.time).toLocaleTimeString()} - Risk Level: ${d.risk}`,
+            });
+            extremeRiskCount++;
+          }
+          if (d.risk > 50) highRiskCount++;
+        });
+
+        setSuspiciousActivity(flaggedActivities);
+        const totalEntries = response.data.riskAnalysis.length;
+        const riskPercentage = (highRiskCount / totalEntries) * 100;
+        const extremeRiskPercentage = (extremeRiskCount / totalEntries) * 100;
+
+        if (extremeRiskPercentage > 40) {
+          setRiskSummary("🚨 HIGH RISK: This stock has frequent and extreme risk fluctuations.");
+          setFinalVerdict("🚨 SUSPICIOUS COMPANY: Frequent high-risk fluctuations detected.");
+        } else if (riskPercentage > 50) {
+          setRiskSummary("⚠️ MEDIUM RISK: Moderate risk fluctuations detected.");
+          setFinalVerdict("⚠️ CAUTION: Some risk patterns suggest instability.");
+        } else {
+          setRiskSummary("✅ LOW RISK: No major risk fluctuations detected.");
+          setFinalVerdict("✅ SAFE COMPANY: No major suspicious activity detected.");
+        }
+      } catch (error) {
+        console.error("Error fetching stock data:", error);
+      }
+    };
+
+    if (symbol) fetchData();
+  }, [symbol]);
 
   return (
-    <div className="p-10 grid grid-cols-2 gap-10">
-      <div>
-        <h1 className="text-3xl mb-5">Google Stock Sentiment Tracker</h1>
-        <p className="mb-5">This dashboard visualizes the sentiment score of Google stock over time and the distribution of positive and negative sentiments.</p>
-
-        <h2 className="text-xl mb-3">Sentiment Score Over Time</h2>
-        <LineChart width={700} height={400} data={data}>
-          <CartesianGrid strokeDasharray="3 3" />
-          <XAxis dataKey="time" label={{ value: "Time", position: "insideBottomRight", offset: 0 }} />
-          <YAxis yAxisId="left" label={{ value: "Sentiment Score", angle: -90, position: "insideLeft" }} />
-          <YAxis yAxisId="right" orientation="right" label={{ value: "Stock Price", angle: 90, position: "insideRight" }} />
-          <Tooltip />
-          <Legend />
-          <Line yAxisId="left" type="monotone" dataKey="sentiment" stroke="#8884d8" name="Sentiment Score" />
-          <Line yAxisId="right" type="monotone" dataKey="price" stroke="#82ca9d" name="Stock Price" />
-        </LineChart>
-
-        <h2 className="text-xl mt-10 mb-3">Sentiment Distribution</h2>
-        <PieChart width={400} height={400} className="mt-10">
-          <Pie data={pieData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={100} label>
-            {pieData.map((entry, index) => (
-              <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-            ))}
-          </Pie>
-          <Legend />
-          <Tooltip />
-        </PieChart>
-
-        <h2 className="text-xl mt-10 mb-3">Risk Level Visualization</h2>
-        <BarChart width={700} height={400} data={data}>
-          <CartesianGrid strokeDasharray="3 3" />
-          <XAxis dataKey="time" />
-          <YAxis />
-          <Tooltip />
-          <Legend />
-          <Bar dataKey="risk" fill="maroon" name="Risk Level" />
-        </BarChart>
+    <div className="min-h-screen p-10" style={{ fontFamily: "Segoe UI, Tahoma, Geneva, Verdana, sans-serif" }}>
+      <div className="header">
+        <div className="logo" onClick={() => scrollToSection(homeRef)} style={{ cursor: "pointer" }}></div>
+        <span className="logo-text" onClick={() => scrollToSection(homeRef)} style={{ cursor: "pointer" }}>
+          Intell-I-Invest
+        </span>
+        <nav>
+          <span onClick={() => scrollToSection(homeRef)} style={{ cursor: "pointer" }}>Home</span>
+          <span onClick={() => scrollToSection(aboutRef)} style={{ cursor: "pointer" }}>About Us</span>
+          <span onClick={() => scrollToSection(rangeRef)} style={{ cursor: "pointer" }}>Our Range</span>
+          
+        </nav>
       </div>
-      <div>
-        <h2 className="text-xl mb-3">Top Gainers/Losers Sentiment Heatmap</h2>
-        {heatmapData.map((entry, index) => (
-          <div key={index} className={`p-3 mb-2 text-white ${entry.sentiment > 0 ? "bg-green-500" : "bg-red-500"}`}>{entry.stock}: {entry.sentiment > 0 ? "+" : ""}{entry.sentiment}</div>
-        ))}
+      <div className="max-w-4xl mx-auto bg-white p-6 rounded-lg shadow-lg">
+        <h1 className="text-3xl font-bold text-center text-gray-800 mb-4">📊 Stock Risk Analysis - {symbol}</h1>
+        <p className="text-center text-gray-600 mb-6">Analyzing potential suspicious activity in {symbol} stock.</p>
+
+        <div className="bg-blue-100 p-4 rounded-lg border-l-8 border-blue-500 shadow-md">
+          <h2 className="text-xl font-semibold text-blue-800">📌 Risk Assessment Summary</h2>
+          <p className="mt-2 text-lg font-medium">{riskSummary}</p>
+        </div>
+
+        <h2 className="text-xl font-semibold text-gray-800 mt-8">🕵️ Suspicious Activity Detected</h2>
+        {suspiciousActivity.length > 0 ? (
+          <ul className="bg-red-100 p-4 mt-2 rounded-lg border-l-8 border-red-500 shadow-md">
+            {suspiciousActivity.map((item, index) => (
+              <li key={index} className="text-red-700">{item.message}</li>
+            ))}
+          </ul>
+        ) : (
+          <p className="text-green-700 bg-green-100 p-4 mt-2 rounded-lg border-l-8 border-green-500 shadow-md">✅ No suspicious activity detected.</p>
+        )}
+
+        <h2 className="text-xl font-semibold text-gray-800 mt-8">📜 Final Verdict</h2>
+        <p className={`p-4 mt-2 text-lg font-bold text-center rounded-lg shadow-md ${
+          finalVerdict.includes("SUSPICIOUS") ? "bg-red-500 text-white" :
+          finalVerdict.includes("CAUTION") ? "bg-yellow-500 text-black" : "bg-green-500 text-white"
+        }`}>{finalVerdict}</p>
+
+        <h2 className="text-xl font-semibold text-gray-800 mt-8">📅 Recent Stock Risk Data</h2>
+        <ul className="bg-gray-100 p-4 mt-2 rounded-lg shadow-md">
+          {stockData.length > 0 ? (
+            stockData.map((entry, index) => (
+              <li key={index} className="border-b border-gray-300 p-2 text-gray-700">
+                🕒 {new Date(entry.time).toLocaleTimeString()} - Risk Level: {entry.risk}
+              </li>
+            ))
+          ) : (
+            <p>No stock data available.</p>
+          )}
+        </ul>
       </div>
     </div>
   );
 };
 
-export default App;
+export default Dashboards;
